@@ -20,7 +20,6 @@ tracking <- here('data', 'tracking.parquet') |>
 
 
 library(dplyr)
-library(ggplot2)
 library(stringr)
 
 tracking |>
@@ -37,7 +36,7 @@ tracking |>
 
 get_mu_player_influence <- function(player_x, player_y,
                                     player_v_x, player_v_y) {
-  c(pi_x, pi_y) + .5*c(v_x, v_y)
+  c(player_x, player_y) + .5*c(player_v_x, player_v_y)
 }
 
 get_player_dist_from_puck <- function(player_x, player_y,
@@ -62,7 +61,7 @@ get_player_speed <- function(player_v_x, player_v_y) {
 get_player_s_rat <- function(player_speed, 
                              # max possible skating speed in ft/s
                              max_speed = 36.67){
-  (speed^2)/(max_speed^2)
+  (player_speed^2)/(max_speed^2)
 }
 
 get_player_s_mat <- function(R, S_rat) {
@@ -82,7 +81,9 @@ get_player_influence_params <- function(player_v_x, player_v_y,
                                         puck_x, puck_y) {
   
   mu = get_mu_player_influence(player_x = player_x,
-                                      player_y = player_y)
+                               player_y = player_y,
+                               player_v_x = player_v_x,
+                               player_v_y = player_v_y)
   
   dist_from_puck = get_player_dist_from_puck(player_x = player_x,
                                              player_y = player_y,
@@ -108,7 +109,6 @@ get_player_influence_params <- function(player_v_x, player_v_y,
   return(list(mu = mu, cov = cov))
   
 }
-
 rink_grid <- expand.grid(seq(0, 200, length.out = 200), seq(0, 80, length.out = 200)) %>%
   rename(p_x = Var1, p_y = Var2)
 
@@ -132,25 +132,6 @@ get_rink_influence(rink_grid, player_x, player_y, mu, cov) {
   return(I_i)
 }
 
-data.grid <- expand.grid(s.1 = seq(0, 30, length.out=200), s.2 = seq(0, 30, length.out=200))
-q.samp <- cbind(data.grid, prob = mvtnorm::dmvnorm(data.grid,
-                                                   mean = mu_i,
-                                                   sigma = cov_i)/
-                  mvtnorm::dmvnorm(c(pi_x, pi_y),
-                                     mean = mu_i,
-                                     sigma = cov_i)
-                  )
-
-ggplot() +
-  geom_raster(data = q.samp, aes(x = s.1, y = s.2, fill = prob)) +
-  geom_contour(data = q.samp, aes(x = s.1, y = s.2, z = prob)) +
-  geom_point(data = tibble(x = puck_x, y = puck_y), aes(x = x, y = y)) +
-  geom_segment(aes(x = pi_x, y = pi_y, xend = pi_x + v_x, yend = pi_y + v_y),
-               arrow = arrow()
-  ) +
-  geom_point(data = tibble(x = pi_x, y = pi_y), aes(x = x, y = y), color = 'red', size = 5) +
-  coord_fixed()
-
 v_x = 4.497199
 v_y = 4.497199
 pi_x = 15
@@ -165,10 +146,31 @@ pi_y = 15
 puck_x = 15
 puck_y = 15
 
+params <- get_player_influence_params(player_v_x = v_x,
+                                          player_v_y = v_y,
+                                          player_x = pi_x,
+                                          player_y = pi_y,
+                                          puck_x = puck_x,
+                                          puck_y = puck_y)
 
-ggplot(q.samp, aes(x=s.1, y=s.2, z=prob)) + 
-  geom_contour() +
-  coord_fixed(xlim = c(-3, 3), ylim = c(-3, 3), ratio = 1) 
+data.grid <- expand.grid(s.1 = seq(0, 30, length.out=200), s.2 = seq(0, 30, length.out=200))
+q.samp <- cbind(data.grid, prob = mvtnorm::dmvnorm(data.grid,
+                                                   mean = params$mu,
+                                                   sigma = params$cov)/
+                  mvtnorm::dmvnorm(c(pi_x, pi_y),
+                                     mean = params$mu,
+                                     sigma = params$cov)
+                  )
+
+ggplot() +
+  geom_raster(data = q.samp, aes(x = s.1, y = s.2, fill = prob)) +
+  geom_contour(data = q.samp, aes(x = s.1, y = s.2, z = prob)) +
+  geom_point(data = tibble(x = puck_x, y = puck_y), aes(x = x, y = y)) +
+  geom_segment(aes(x = pi_x, y = pi_y, xend = pi_x + v_x, yend = pi_y + v_y),
+               arrow = arrow()
+  ) +
+  geom_point(data = tibble(x = pi_x, y = pi_y), aes(x = x, y = y), color = 'red', size = 5) +
+  coord_fixed()
 
 events |>
   filter(event_type == 'pass') |>
@@ -281,7 +283,7 @@ boxed_events <- events |>
             join_by(x_adj >= x_min, x_adj < x_max,
                     y_adj >= y_min, y_adj < y_max)) |>
   mutate(box_id = stringr::str_c(x_box_id, y_box_id, sep = '-')) 
-
+library(tidyr)
 possessions <- boxed_events |>
   group_by(game_id, sequence_id) |>
   arrange(sl_event_id) |>
