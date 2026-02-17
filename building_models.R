@@ -123,3 +123,24 @@ events |>
        size = 'Count',title = "Probability to Shoot Calibration") +
   ylim(0, 1) +
   theme(text=element_text(size=15))
+
+# xG of sport logiq's given model for comparison
+shots |>
+  mutate(interval = cut(sl_xg_all_shots, breaks = seq(0, 1, by = .1),
+                        include.lowest = T)) |>
+  group_by(interval) |>
+  summarize(int_pred = mean(sl_xg_all_shots),
+            int_actual = mean(is_goal),
+            se = sqrt((int_actual*(1-int_actual))/n()),
+            n = n(),
+            ci_lower = pmax(int_actual - 2*se, 0),
+            ci_upper = pmin(int_actual + 2*se, 1)) |>
+  ggplot(aes(x = int_pred, y = int_actual)) + 
+  geom_point(alpha = 0.5, aes(size = n)) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper)) +
+  geom_smooth(se = FALSE, method = 'loess') +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(x = "Predicted probability", y = "Observed fraction",
+       size = 'Count',title = "xG Calibration") +
+  ylim(0, 1) +
+  theme(text=element_text(size=15))
