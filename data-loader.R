@@ -127,7 +127,11 @@ sc_move_data <- fi_possessions |>
   ) |>
   group_by(game_id, possession_id) |>
   mutate(to_x_adj = lead(x_adj),
-         to_y_adj = lead(y_adj)) |>
+         to_y_adj = lead(y_adj),
+         to_x_min = lead(x_min),
+         to_x_max = lead(x_max),
+         to_y_min = lead(y_min),
+         to_y_max = lead(y_max)) |>
   filter(!is.na(to_x_adj)) |> 
   ungroup() |>
   # fill(puck_x_adj, puck_y_adj, .by = c(game_id, sl_event_id), .direction = 'downup') |>
@@ -138,17 +142,32 @@ sc_move_data <- fi_possessions |>
   purrr::map(\(df){
     mu <- get_player_influence_mu(player_x = df$tracking_x_adj, player_y = df$tracking_y_adj,
                               player_v_x = df$tracking_vel_x_adj, player_v_y = df$tracking_vel_y_adj)
+    print(mu)
     cov <- get_player_influence_cov(player_v_x = df$tracking_vel_x_adj, player_v_y = df$tracking_vel_y_adj,
                                     player_x = df$tracking_x_adj, player_y = df$tracking_y_adj,
                                     puck_x = df$puck_x_adj[1], puck_y = df$puck_y_adj[1])
-    f_i_point = mvtnorm::dmvnorm(x = c(df$to_x_adj, df$to_y_adj), mean = mu, sigma = cov)
-    f_i_skater = mvtnorm::dmvnorm(x = mu, mean = mu, sigma = cov)
+    
+    integ_box <- mvtnorm::pmvnorm(upper = c(df$x_max, df$y_max),
+                                  lower = c(df$x_min, df$y_min),
+                                  mean = mu,
+                                  sigma = cov)
+    
+    # f_i_point = mvtnorm::dmvnorm(x = c(df$to_x_adj, df$to_y_adj), mean = mu, sigma = cov)
+    # f_i_skater = mvtnorm::dmvnorm(x = mu, mean = mu, sigma = cov)
     
     df |>
-      mutate(I_i = f_i_point/f_i_skater)
+      mutate(#I_i = f_i_point/f_i_skater
+        integ_box = integ_box
+        )
+    
   }) |>
   purrr::list_rbind() |>
   group_by(game_id, possession_id) |>
-  mutate(rink_control = rje::expit(sum(if_else(tracking_team_id == possession_team_id, I_i, 0)) -
-              sum(if_else(tracking_team_id != possession_team_id, I_i, 0)))) |>
+  mutate(# rink_control = rje::expit(sum(if_else(tracking_team_id == possession_team_id, I_i, 0)) -
+              # sum(if_else(tracking_team_id != possession_team_id, I_i, 0)))
+        pos_box_control = sum(if_else(tracking_team_id == possession_team_id, integ_box, 0)),
+        neg_box_control = sum(if_else(tracking_team_id != possession_team_id, integ_box, 0)),
+        tot_box_control = pos_box_control - neg_box_control,
+         box_control = rje::expit(tot_box_control)
+         ) |>
   ungroup()
