@@ -10,7 +10,6 @@ library(tidyr)
 events <- here('data', 'events.parquet') |>
   arrow::read_parquet()
 
-
 # Helper functions + dataset prep -----------------------------------------
 
 # 20 boxes across and 17 boxes long to grid the rink into 500 5x5ft boxes for ex
@@ -55,10 +54,10 @@ possessions <- boxed_events |>
   group_by(game_id, sequence_id) |>
   arrange(sl_event_id) |>
   # possession starts when team recovers puck after faceoff, not when faceoff is won
-  mutate(possession_team = if_else(event_type == 'lpr' & outcome == 'successful',
-                                   team, NA)) |>
+  mutate(possession_team = if_else(event_type == 'lpr' & outcome == 'successful', team, NA)) |>
   fill(possession_team, .direction = 'down') |>
-  filter(!is.na(possession_team))
+  filter(!is.na(possession_team)) |>
+  mutate(possession_id = consecutive_id(possession_team))
 
 # initial transition matrix, with transitions missing if we did not observe them
 init_trans_mat <- possessions |>
@@ -66,10 +65,6 @@ init_trans_mat <- possessions |>
                            'dumpin', 'dumpout',
                            'carry', 'puckprotection', 'reception',
                            'failedpasslocation')) |>
-  group_by(game_id) |>
-  arrange(sl_event_id) |>
-  # possession id is only unique to each sequence
-  mutate(possession_id = consecutive_id(possession_team)) |>
   group_by(game_id, possession_id) |>
   mutate(from_box = lag(box_id)) |> 
   filter(!is.na(from_box)) |>
@@ -136,7 +131,7 @@ xT_prev <- tibble(box_id = stringr::str_c(rink_grid$x_box_id, rink_grid$y_box_id
 
 xT_curr <- xT_prev
 
-tol <- .01
+tol <- .001
 
 max_deviation <- 1
 
@@ -159,6 +154,9 @@ for (iter in 1:100) {
       filter(box_id == box) |> 
       pull(shot_prob)
     
+    # move prob per box
+    box_mp = 1 - box_sp
+    
     # get goal prob given shot for box
     box_gp <- box_goal_probs |> 
       filter(box_id == box) |> 
@@ -173,7 +171,7 @@ for (iter in 1:100) {
       pull(tp_xT) |>
       sum()
     
-    xT_curr[xT_curr[['box_id']] == box, 'xT'] <- box_sp*box_gp + summed_t_xt
+    xT_curr[xT_curr[['box_id']] == box, 'xT'] <- box_sp*box_gp + box_mp*summed_t_xt
     
   }
   
