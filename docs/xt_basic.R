@@ -8,7 +8,7 @@ library(dplyr)
 library(tidyr)
 
 source(here('docs', 'misc_helper_fns.R'))
-source(here('data_loader.R'))
+source(here('data', 'data-files', 'data_loader.R'))
 
 # Helper functions + dataset prep -----------------------------------------
 
@@ -54,7 +54,9 @@ box_shot_probs <- sp_data_basic |>
             shot_prob = total_shots/total) |>
   full_join(tibble(box_id = all_box_ids, shot_prob_fill = 0),
             by = 'box_id') |>
-  mutate(shot_prob = if_else(is.na(shot_prob), shot_prob_fill, shot_prob)) |>
+  mutate(shot_prob = if_else(is.na(shot_prob), shot_prob_fill, shot_prob),
+         total_shots = if_else(is.na(total_shots), 0, total_shots),
+         total = if_else(is.na(total), 0, total)) |>
   select(-shot_prob_fill)
 
 # get the empirical goal probability given a shot was taken from a certain box
@@ -66,7 +68,9 @@ box_goal_probs <- gp_data_basic |>
             goal_prob = total_goals/total) |>
   full_join(tibble(box_id = all_box_ids, goal_prob_fill = 0),
             by = 'box_id') |>
-  mutate(goal_prob = if_else(is.na(goal_prob), goal_prob_fill, goal_prob)) |>
+  mutate(goal_prob = if_else(is.na(goal_prob), goal_prob_fill, goal_prob),
+         total_goals = if_else(is.na(total_goals), 0, total_goals),
+         total = if_else(is.na(total), 0, total)) |>
   select(-goal_prob_fill)
 
 
