@@ -10,61 +10,19 @@ library(tidyr)
 events <- here('data', 'events.parquet') |>
   arrow::read_parquet()
 
+source(here('docs', 'misc_helper_fns.R'))
+source(here('docs', 'data_loader.R'))
+
 # Helper functions + dataset prep -----------------------------------------
 
-# 20 boxes across and 17 boxes long to grid the rink into 500 5x5ft boxes for ex
-grid_the_rink <- function(n_boxes_x, n_boxes_y) {
-  # I am going to assume nice values for box lengths and not put in any safeguards right now
-  box_x_length_feet <- 200/n_boxes_x
-  box_y_length_feet <- 85/n_boxes_y
-  
-  rink_grid <- expand.grid(c(1:n_boxes_x), c(1:n_boxes_y)) |>
-    rename(x_box_id = Var1, y_box_id = Var2) |>
-    mutate(x_min = -100 + box_x_length_feet*(x_box_id - 1),
-           x_max = x_min + box_x_length_feet,
-           y_min = -42.5 + box_y_length_feet*(y_box_id - 1),
-           y_max = y_min + box_y_length_feet
-    )
-  return(rink_grid)
-}
+mp_data_basic <- get_move_prob_data_basic()
+sp_data_basic <- get_sp_data_basic()
 
-rink_grid <- grid_the_rink(n_boxes_x = 20, n_boxes_y = 10)
 
-# assign each event and associated coordinate pair to a rink grid box
-boxed_events <- events |>
-  filter(!is.na(x_adj), !is.na(y_adj),
-         # filtering out shootouts
-         period <= 3,
-         # filtering out penalty shots
-         event_type != 'penaltyshot',
-         stringr::str_sub(event_type, start = 1L, end = 2L) != 'ps',
-         # filter to events with players involved
-         !is.na(player_id),
-         x_adj <= 100, x_adj >= -100, y_adj <= 42.5, y_adj >= -42.5) |>
-  left_join(rink_grid |>
-              mutate(y_max = if_else(y_max == 42.5, 42.51, y_max),
-                     x_max = if_else(x_max == 100, 100.01, x_max)),
-            join_by(x_adj >= x_min, x_adj < x_max,
-                    y_adj >= y_min, y_adj < y_max)) |>
-  mutate(box_id = stringr::str_c(x_box_id, y_box_id, sep = '-')) 
-
-# want unique ids of uninterrupted possessions (i.e. other team does not gain
-# possession, whistle not blown)
-possessions <- boxed_events |>
-  group_by(game_id, sequence_id) |>
-  arrange(sl_event_id) |>
-  # possession starts when team recovers puck after faceoff, not when faceoff is won
-  mutate(possession_team = if_else(event_type == 'lpr' & outcome == 'successful', team, NA)) |>
-  fill(possession_team, .direction = 'down') |>
-  filter(!is.na(possession_team)) |>
-  mutate(possession_id = consecutive_id(possession_team))
+rink_grid <- grid_the_rink()
 
 # initial transition matrix, with transitions missing if we did not observe them
-init_trans_mat <- possessions |>
-  filter(event_type %in% c('controlledbreakout', 'pass',
-                           'dumpin', 'dumpout',
-                           'carry', 'puckprotection', 'reception',
-                           'failedpasslocation')) |>
+init_trans_mat <- mp_data_basic |>
   group_by(game_id, possession_id) |>
   mutate(from_box = lag(box_id)) |> 
   filter(!is.na(from_box)) |>
@@ -91,12 +49,7 @@ trans_mat <- expand.grid(all_box_ids,
   select(-transition_prob_fill)
 
 # get empirical shooting probability for each box
-box_shot_probs <- possessions |>
-  # these are events I determined to be moves (pass, carry) or shots
-  filter(event_type %in% c('controlledbreakout', 'pass',
-                           'dumpin', 'dumpout',
-                           'carry', 'puckprotection',
-                           'shot')) |>
+box_shot_probs <- sp_data_basic |>
   group_by(box_id) |>
   summarize(total_shots = if_else(event_type == 'shot', 1, 0) |>
               sum(),
