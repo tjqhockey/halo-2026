@@ -7,17 +7,14 @@ library(here)
 library(dplyr)
 library(tidyr)
 
-events <- here('data', 'events.parquet') |>
-  arrow::read_parquet()
-
 source(here('docs', 'misc_helper_fns.R'))
-source(here('docs', 'data_loader.R'))
+source(here('data_loader.R'))
 
 # Helper functions + dataset prep -----------------------------------------
 
 mp_data_basic <- get_move_prob_data_basic()
 sp_data_basic <- get_sp_data_basic()
-
+gp_data_basic <- get_gp_data_basic()
 
 rink_grid <- grid_the_rink()
 
@@ -61,8 +58,7 @@ box_shot_probs <- sp_data_basic |>
   select(-shot_prob_fill)
 
 # get the empirical goal probability given a shot was taken from a certain box
-box_goal_probs <- possessions |>
-  filter(event_type == 'shot') |>
+box_goal_probs <- gp_data_basic |>
   group_by(box_id) |>
   summarize(total_goals = if_else(stringr::str_detect(flags, 'withgoal'), 1, 0) |>
               sum(),
@@ -84,7 +80,7 @@ xT_prev <- tibble(box_id = stringr::str_c(rink_grid$x_box_id, rink_grid$y_box_id
 
 xT_curr <- xT_prev
 
-tol <- .001
+tol <- .005
 
 max_deviation <- 1
 

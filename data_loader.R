@@ -47,6 +47,8 @@ get_boxed_events <- function() {
               join_by(x_adj >= x_min, x_adj < x_max,
                       y_adj >= y_min, y_adj < y_max)) |>
     mutate(box_id = stringr::str_c(x_box_id, y_box_id, sep = '-')) 
+  
+  return(boxed_events)
 }
 
 # want unique ids of uninterrupted possessions (i.e. other team does not gain
@@ -69,12 +71,14 @@ get_possessions <- function(){
     mutate(possession_id = consecutive_id(possession_team_id)) |>
     ungroup()
   
+  return(possessions)
+  
 }
 
 # no need for clean tracking data here
 get_move_prob_data_basic <- function() {
-  possessions <- get_possessions()
   
+  possessions <- get_possessions()
   mp_data_simple <- possessions |>
     filter(event_type %in% c('controlledbreakout', 'pass',
                              'dumpin', 'dumpout',
@@ -88,13 +92,23 @@ get_move_prob_data_basic <- function() {
 # calculated per box
 get_sp_data_basic <- function() {
   
-  possessions |>
+  possessions <- get_possessions()
+  sp_data_basic <- possessions |>
     # these are events I determined to be moves (pass, carry) or shots
     filter(event_type %in% c('controlledbreakout', 'pass',
                              'dumpin', 'dumpout',
                              'carry', 'puckprotection',
                              'shot'))
+  return(sp_data_basic)
+}
 
+get_gp_data_basic <- function(){
+  possessions <- get_possessions()
+  
+  gp_data_basic <- possessions |>
+    filter(event_type == 'shot')
+  
+  return(gp_data_basic)
 }
 
 # now we care that we have clean tracking for our shooting prob model
@@ -106,44 +120,44 @@ clean_tracking_event_ids <- function() {
   
 }
 
-# want to filter to events that have clean tracking data
-# already checked that there is only one row per player id in players table
-# we want to check for 5 v 5 situations, no pulled goalie, no weirdness
-not_too_many_men <- tracking |>
-  left_join(players |>
-              select(player_id, position_group),
-            join_by(player_id)) |>
-  group_by(game_id, sl_event_id, position_group) |>
-  summarize(n = n()) |> View()
-  mutate(g_f = case_when())
-  group_by(game_id, sl_event_id) |>
-  summarize() 
-  
-
-  
-(tracking |>
-  mutate(v = sqrt(tracking_vel_x^2 + tracking_vel_y^2)) |>
-  filter(tracking_vel_x > 36 | tracking_vel_y > 36 | v > 36) |>
-    filter(v < 100) |>
-    pull(v)|>
-  hist()
-  nrow())/nrow(tracking)
-  
-no_empty_nets <- events |>
-  left_join(stints,
-            join_by(game_id, game_stint))
-
-# full information possessions
-fi_possessions <- possessions |>
-  filter(has_tracking_data == 1, event_player_tracked == 1) |>
-
-tracking |>
-  group_by(game_id, sl_event_id) |>
-  summarize(n = n()) |>
-  group_by(n) |>
-  summarize(num = n()) |> View()
-
-tracking |>
-  group_by(game_id, sl_event_id) |>
-  filter(n() == 19) |> View()
-  
+# # want to filter to events that have clean tracking data
+# # already checked that there is only one row per player id in players table
+# # we want to check for 5 v 5 situations, no pulled goalie, no weirdness
+# not_too_many_men <- tracking |>
+#   left_join(players |>
+#               select(player_id, position_group),
+#             join_by(player_id)) |>
+#   group_by(game_id, sl_event_id, position_group) |>
+#   summarize(n = n()) |> View()
+#   mutate(g_f = case_when())
+#   group_by(game_id, sl_event_id) |>
+#   summarize() 
+#   
+# 
+#   
+# (tracking |>
+#   mutate(v = sqrt(tracking_vel_x^2 + tracking_vel_y^2)) |>
+#   filter(tracking_vel_x > 36 | tracking_vel_y > 36 | v > 36) |>
+#     filter(v < 100) |>
+#     pull(v)|>
+#   hist()
+#   nrow())/nrow(tracking)
+#   
+# no_empty_nets <- events |>
+#   left_join(stints,
+#             join_by(game_id, game_stint))
+# 
+# # full information possessions
+# fi_possessions <- possessions |>
+#   filter(has_tracking_data == 1, event_player_tracked == 1) |>
+# 
+# tracking |>
+#   group_by(game_id, sl_event_id) |>
+#   summarize(n = n()) |>
+#   group_by(n) |>
+#   summarize(num = n()) |> View()
+# 
+# tracking |>
+#   group_by(game_id, sl_event_id) |>
+#   filter(n() == 19) |> View()
+#   
