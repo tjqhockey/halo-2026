@@ -188,28 +188,42 @@ get_possessions_tracking <- function(){
                join_by(game_id, possession_id, n)) |>
     select(-n)
   
-  possessions |>
+  pos_track <- possessions |>
     inner_join(possessions_clean, 
                join_by(game_id, possession_id)) |>
-    left_join(tracking_data |>
+    left_join(tracking |>
                 select(game_id, sl_event_id, tracking_player_id = player_id,
                        tracking_team_id = team_id,
                        tracking_x, tracking_y, tracking_vel_x, tracking_vel_y),
-              join_by(game_id, sl_event_id)) |>
+              join_by(game_id, sl_event_id))
+  
+  filter_na_players <- pos_track |>
     left_join(players |>
                 select(player_id, position_group),
               join_by(player_id)) |>
-    mutate(skater = if_else(position_group %in% c('F', 'D'), 1, 0))
-    
-  ## COME BACK IF TIME
+    mutate(skater = if_else(position_group %in% c('F', 'D'), 1, 0)) |>
+    group_by(game_id, sl_event_id, team_id) |>
+    summarize(total_id_skaters_team = sum(skater)) |>
+    mutate(filter_out_nas = if_else(total_id_skaters_team == 5, 1, 0))
   
-  # # if skaters == 5 on a team and there are players with NA id, filter out
-  # filter_out_nas <- filter_out_nas()
-  # 
-  # # constant x velocities 
-  # repaired_velocities <- 
-    
-    
+  # might be some concerns still about total players per team when accounting
+  # for na players but whatever
+  cleanest_pos_track <- pos_track |>
+    left_join(filter_na_players,
+              join_by(game_id, sl_event_id, team_id)) |>
+    filter(!(is.na(tracking_player_id) & filter_out_nas == 1)) |>
+    mutate(tracking_v = sqrt(tracking_vel_x^2 + tracking_vel_y^2),
+           scaling_constant = 36/tracking_v,
+           tracking_vel_x = if_else(tracking_v > 36,
+                                    scaling_constant*tracking_vel_x,
+                                    tracking_vel_x),
+           tracking_vel_y = if_else(tracking_v > 36,
+                                    scaling_constant*tracking_vel_y,
+                                    tracking_vel_y)
+           )
+  
+  return(cleanest_pos_track)
+  
 }
 
 clean_tracking_event_ids <- function() {
