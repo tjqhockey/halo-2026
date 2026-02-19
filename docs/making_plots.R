@@ -2,6 +2,7 @@ library(here)
 library(tidyverse)
 library(ggpubr)
 library(sportyR)
+library(grid)
 
 ## Not needed as I'm writing this and will take some time to run
 #source(here('docs', 'xt_basic.R'))
@@ -151,24 +152,46 @@ top_5_with_types |>
 
 
 ## Making ice rink xT added at a frame plot
+frame_1_plot <- tracking |>
+  filter(game_id == "df609ab7-6328-37cf-a71a-fb6672cedaf4",
+         sl_event_id == "548") |>
+  left_join(events)
+x_target <- 75.24410
+y_target <- 5.275387
+
 geom_hockey(league = "AHL",
             display_range = "offense") +
-  geom_rect(
-    data = plot_rink_grid,
-    aes(xmin = x_min, xmax = x_max,
-        ymin = y_min, ymax = y_max),
-    alpha = 0,
+  geom_segment(
+    data = frame_1_plot |> filter(player_name == "Bourque, Mavrik"),
+    aes(x = x_adj, y = y_adj-1,
+        xend = x_target, yend = y_target - 3),
     color = "black",
-    linewidth = 0.3
-  )
-
-
-
-
-
-
-
-
+    linewidth = 1.5,
+    arrow = arrow(length = unit(0.2, "inches"), type = "closed")
+  )+
+  geom_point(
+    data = frame_1_plot,
+    aes(x = tracking_x, y = tracking_y, color = team_name),
+    size = 5,
+    alpha = 0.8
+  ) +
+  scale_color_manual(values = c("Stars" = "darkgreen", 
+                                "Wolves" = "darkred")) +
+  geom_point(data = frame_1_plot |>
+               filter(player_name == "Bourque, Mavrik"),
+             aes(x = x_adj,y = y_adj),
+             size = 3,
+             color = "black") +
+  geom_text(
+    data = tibble(),
+    aes(x = 71, y = 30),
+    label = "+9.3% Predicted \n Probability to Score",
+    color = "black",
+    size = 3,
+    hjust = 0,
+    vjust = 1
+  ) +
+  labs(color = "Team Name")
 
 
 
@@ -186,12 +209,14 @@ test <- xT_basic_data |>
          team,sequence_id,outcome,xT,xT_next,change_xT)
 
 test2 <- xT_basic_data |>
-  filter(event_type == "pass") |>
-  select(event_type,description,player_name,
-         team,sequence_id,outcome,xT,xT_next,change_xT)
+  filter(game_id ==
+           "df609ab7-6328-37cf-a71a-fb6672cedaf4",
+         sl_event_id == 548)
 
-test3 <- events |>
-  event_type == "shot"
+test3 <- xT_basic_data |>
+  #filter(player_name == "Bourque, Mavrik")
+  filter(possession_id == 
+  "df609ab7-6328-37cf-a71a-fb6672cedaf4_6_27")
          
 
 
