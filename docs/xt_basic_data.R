@@ -41,11 +41,11 @@ xT_basic_data <- xT_pos_5v5  |>
 xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
   group_by(player_id, player_name) |>
-  summarize(total_xT = sum(change_xT, na.rm = T)) |> 
+  summarize(total_xT = sum(change_xT, na.rm = T)) |>
   ungroup() |>
   arrange(desc(total_xT)) |>
   mutate(rank = 1:n()) |> 
-  # filter(str_detect(player_name, 'Griffith'))
+  filter(str_detect(player_name, 'Grimaldi'))
   View()
 
 saveRDS(xT_basic_data, here('data', 'datasets', 'xT_basic_data.R'))
