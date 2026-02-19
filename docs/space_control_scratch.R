@@ -1,7 +1,8 @@
 ## space control + move prob model - computes space control of the point they move it
 # to in the next frame of a possession using tracking data from the current frame
 
-list_of_packages <- c("furrr", "here", "dplyr", 'tidyr', 'purrr', 'stringr')
+list_of_packages <- c("furrr", "here", "dplyr", 'tidyr', 'purrr', 'stringr',
+                      'arrow')
 
 for (p in list_of_packages) {
   if (!require(p, character.only = TRUE)) {
