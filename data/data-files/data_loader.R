@@ -68,7 +68,7 @@ get_possessions <- function(){
                                         NA)) |>
     fill(possession_team_id, .direction = 'down') |>
     filter(!is.na(possession_team_id)) |>
-    mutate(possession_id = consecutive_id(possession_team_id)) |>
+    mutate(possession_id = str_c(game_id, sequence_id, consecutive_id(possession_team_id), sep = '_')) |>
     ungroup()
   
   return(possessions)
@@ -164,68 +164,10 @@ get_xT_data_basic <- function() {
   return(xT_data_basic)
 }
 
-
 # Clean tracking data functions -------------------------------------------
 
-get_possessions_tracking <- function(){
-  
-  clean_ids <- clean_tracking_event_ids()
-  
-  possessions <- get_possessions()
-  
-  pos_filtered_n <- possessions |>
-    inner_join(clean_ids,
-               join_by(game_id, sl_event_id)) |>
-    group_by(game_id, possession_id) |>
-    summarize(n = n())
-  
-  pos_unfiltered_n <- possessions |>
-    group_by(game_id, possession_id) |>
-    summarize(n = n())
-  
-  possessions_clean_ids <- pos_unfiltered_n |>
-    inner_join(pos_filtered_n,
-               join_by(game_id, possession_id, n)) |>
-    select(-n)
-  
-  pos_track <- possessions |>
-    inner_join(possessions_clean, 
-               join_by(game_id, possession_id)) |>
-    left_join(tracking |>
-                select(game_id, sl_event_id, tracking_player_id = player_id,
-                       tracking_team_id = team_id,
-                       tracking_x, tracking_y, tracking_vel_x, tracking_vel_y),
-              join_by(game_id, sl_event_id))
-  
-  filter_na_players <- pos_track |>
-    left_join(players |>
-                select(player_id, position_group),
-              join_by(player_id)) |>
-    mutate(skater = if_else(position_group %in% c('F', 'D'), 1, 0)) |>
-    group_by(game_id, sl_event_id, team_id) |>
-    summarize(total_id_skaters_team = sum(skater)) |>
-    mutate(filter_out_nas = if_else(total_id_skaters_team == 5, 1, 0))
-  
-  # might be some concerns still about total players per team when accounting
-  # for na players but whatever
-  cleanest_pos_track <- pos_track |>
-    left_join(filter_na_players,
-              join_by(game_id, sl_event_id, team_id)) |>
-    filter(!(is.na(tracking_player_id) & filter_out_nas == 1)) |>
-    mutate(tracking_v = sqrt(tracking_vel_x^2 + tracking_vel_y^2),
-           scaling_constant = 36/tracking_v,
-           tracking_vel_x = if_else(tracking_v > 36,
-                                    scaling_constant*tracking_vel_x,
-                                    tracking_vel_x),
-           tracking_vel_y = if_else(tracking_v > 36,
-                                    scaling_constant*tracking_vel_y,
-                                    tracking_vel_y)
-           )
-  
-  return(cleanest_pos_track)
-  
-}
-
+# fetch intersection of all ids that meet our criteria: no empty nets, 5v5, 
+# no more than 5 identified skaters on the play, has full tracking data
 clean_tracking_event_ids <- function() {
   
   # events where nets are not empty
@@ -250,7 +192,7 @@ clean_tracking_event_ids <- function() {
     filter(filter_out == 0) |>
     select(game_id, sl_event_id) |>
     ungroup()
-    
+  
   # intermediary df
   penalties <- readRDS(here('data', 'datasets', 'penalties.rds'))
   
@@ -264,7 +206,7 @@ clean_tracking_event_ids <- function() {
   has_full_tracking <- events |>
     filter(has_tracking_data == 1, event_player_tracked == 1) |>
     select(game_id, sl_event_id)
-    
+  
   clean_ids <- no_empty_nets |>
     inner_join(not_too_many_skaters,
                join_by(game_id, sl_event_id)) |>
@@ -276,47 +218,144 @@ clean_tracking_event_ids <- function() {
   return(clean_ids)
 }
 
-
-
-# want to filter to events that have clean tracking data
-# already checked that there is only one row per player id in players table
-# we want to check for 5 v 5 situations, no pulled goalie, no weirdness
-
-# filter_out_na_players <- tracking_pos_filter |>
-#   mutate()
-# #   
-# # 
-# #   
-# (tracking |>
-#   mutate(v = sqrt(tracking_vel_x^2 + tracking_vel_y^2)) |>
-#   filter(tracking_vel_x > 36 | tracking_vel_y > 36 | v > 36) |> View()
-#     # filter(v < 100) |>
-#     pull(v)|>
-#   hist()
-#   nrow())/nrow(tracking)
-# 
-# tracking |>
-#   filter(game_id == '00b0366a-95c6-5250-2dae-e3dd5c4198bc', sl_event_id == 466) |> 
-#   View()
-#   
+# get the possessions where all the events in the possession are clean: i.e. every
+# event id is returned by our clean_tracking_event_ids function
+get_possessions_tracking <- function(){
   
-# 
-# # full information possessions
-# fi_possessions <- possessions |>
-#   filter(has_tracking_data == 1, event_player_tracked == 1) |>
-# 
-# tracking |>
-#   group_by(game_id, sl_event_id) |>
-#   summarize(n = n()) |>
-#   group_by(n) |>
-#   summarize(num = n()) |> View()
-# 
-# tracking |>
-#   group_by(game_id, sl_event_id) |>
-#   filter(n() == 19) |> View()
-#   
+  # get ids of events that have clean tracking data
+  clean_ids <- clean_tracking_event_ids()
+  
+  possessions <- get_possessions()
+  
+  # possessions with clean ids - how many plays per possession?
+  pos_filtered_n <- possessions |>
+    inner_join(clean_ids,
+               join_by(game_id, sl_event_id)) |>
+    group_by(game_id, possession_id) |>
+    summarize(n = n())
+  
+  # possessions without cleaned ids - how many events per possession?
+  pos_unfiltered_n <- possessions |>
+    group_by(game_id, possession_id) |>
+    summarize(n = n())
+  
+  # only get possessions where all the events in the possession have clean
+  # tracking data
+  possessions_clean_ids <- pos_unfiltered_n |>
+    inner_join(pos_filtered_n,
+               join_by(game_id, possession_id, n))
+  
+  # join clean possessions with tracking data
+  pos_track <- possessions |>
+    inner_join(possessions_clean_ids, 
+               join_by(game_id, possession_id)) |>
+    left_join(tracking |>
+                select(game_id, sl_event_id, tracking_player_id = player_id,
+                       tracking_team_id = team_id,
+                       tracking_x, tracking_y, tracking_vel_x, tracking_vel_y),
+              join_by(game_id, sl_event_id))
+  
+  # these are the plays where we need to filter out NA players
+  filter_na_players <- pos_track |>
+    left_join(players |>
+                select(player_id, position_group),
+              join_by(player_id)) |>
+    mutate(skater = if_else(position_group %in% c('F', 'D'), 1, 0)) |>
+    group_by(game_id, sl_event_id, team_id) |>
+    summarize(total_id_skaters_team = sum(skater)) |>
+    mutate(filter_out_nas = if_else(total_id_skaters_team == 5, 1, 0))
+  
+  # might be some concerns still about total players per team when accounting
+  # for na players but whatever
+  cleanest_pos_track <- pos_track |>
+    # filter out na players
+    left_join(filter_na_players,
+              join_by(game_id, sl_event_id, team_id)) |>
+    filter(!(is.na(tracking_player_id) & filter_out_nas == 1)) |>
+    # clean up velocities that are nonsensical
+    mutate(tracking_v = sqrt(tracking_vel_x^2 + tracking_vel_y^2),
+           # 36 ft/s is the maximum we would expect any skater to go
+           # as this is the record speed for the nhl fastest skater comp
+           scaling_constant = 36/tracking_v,
+           tracking_vel_x = case_when(tracking_v > 36 ~ scaling_constant*tracking_vel_x,
+                                      # only seems to apply to like 31 rows of this data
+                                      is.na(tracking_vel_y) ~ 0,
+                                      T ~ tracking_vel_x),
+           tracking_vel_y = case_when(tracking_v > 36 ~ scaling_constant*tracking_vel_y,
+                                      # only seems to apply to like 31 rows of this data
+                                      is.na(tracking_vel_y) ~ 0,
+                                      T ~ tracking_vel_y)
+           ) |>
+    # join with games to adjust tracking coords so offensive zone always to right
+    left_join(games |> 
+                select(game_id, home_start_net, home_team_id),
+              by = 'game_id') |>
+    # flip the net sign
+    mutate(home_start_net = if_else(home_start_net == 'pos_x', 1, -1),
+           home_team_net_sign = if_else(period %in% c(1, 3), home_start_net, -home_start_net),
+           # if possession team = home team and home_team_net_sign is negative - do nothing
+           # if possession team = home team and home_team_net_sign is positive - flip the coords
+           # if possession team != home team and home_team_net_sign is positive - do nothing
+           # if possession team != home team and home_team_net_sign is negative - flip coords
+           needs_flipped = case_when(possession_team_id == home_team_id & home_team_net_sign > 0 ~ 1,
+                                     possession_team_id != home_team_id & home_team_net_sign < 0 ~ 1,
+                                     T ~ 0),
+           tracking_x_adj = if_else(needs_flipped == 1, -tracking_x, tracking_x),
+           tracking_y_adj = if_else(needs_flipped == 1, -tracking_y, tracking_y),
+           tracking_vel_x_adj = if_else(needs_flipped == 1, -tracking_vel_x, tracking_vel_x),
+           tracking_vel_y_adj = if_else(needs_flipped == 1, -tracking_vel_y, tracking_vel_y),
+           puck_x_adj = x_adj,
+           puck_y_adj = y_adj
+    )
+  
+  return(cleanest_pos_track)
+  
+}
 
-# now we care that we have clean tracking for our shooting prob model
+get_move_prob_data_tracking <- function() {
+  
+  possessions <- get_possessions_tracking()
+  
+  mp_data_tracking <- possessions |>
+    filter(event_type %in% c('controlledbreakout', 'pass',
+                             'dumpin', 'dumpout',
+                             'carry', 'puckprotection', 'reception',
+                             'failedpasslocation')) 
+  return(mp_data_tracking)
+}
+
+# same but now with tracking of other players
 get_sp_data_tracking <- function() {
   
+  possessions <- get_possessions_tracking()
+  sp_data_tracking <- possessions |>
+    # these are events I determined to be moves (pass, carry) or shots
+    filter(event_type %in% c('controlledbreakout', 'pass',
+                             'dumpin', 'dumpout',
+                             'carry', 'puckprotection',
+                             'shot'))
+  return(sp_data_tracking)
+}
+
+# same but now with tracking of other players
+get_gp_data_tracking <- function(){
+  possessions <- get_possessions_tracking()
+  
+  gp_data_tracking <- possessions |>
+    filter(event_type == 'shot')
+  
+  return(gp_data_tracking)
+}
+
+# same but now with tracking of other players
+get_xT_data_tracking <- function() {
+  
+  possessions <- get_possessions_tracking()
+  
+  xT_data_tracking <- possessions |>
+    filter(event_type %in% c('controlledbreakout', 'pass',
+                             'dumpin', 'dumpout',
+                             'carry', 'puckprotection', 'reception',
+                             'failedpasslocation', 'shot')) 
+  return(xT_data_tracking)
 }
