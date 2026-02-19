@@ -1,8 +1,5 @@
 library(here)
 library(dplyr)
-library(sportyR)
-library(ggplot2)
-library(dplyr)
 library(stringr)
 library(tidyr)
 
