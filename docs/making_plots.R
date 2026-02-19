@@ -150,6 +150,30 @@ top_5_with_types |>
   theme_bw()
 
 
+## Making ice rink xT added at a frame plot
+geom_hockey(league = "AHL",
+            display_range = "offense") +
+  geom_rect(
+    data = plot_rink_grid,
+    aes(xmin = x_min, xmax = x_max,
+        ymin = y_min, ymax = y_max),
+    alpha = 0,
+    color = "black",
+    linewidth = 0.3
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+## Just for testing/bugfixing
 test <- xT_basic_data |>
   group_by(game_id,possession_id) |>
   arrange(sl_event_id.by_group = TRUE) |>
@@ -158,17 +182,17 @@ test <- xT_basic_data |>
             opp_team,opp_team_id,
             possession_team_id,
             flags)) |>
-  select(description,player_name,team,sequence_id,event_type,outcome,xT,xT_next,change_xT)
+  select(event_type,description,player_name,
+         team,sequence_id,outcome,xT,xT_next,change_xT)
 
-test2 <- events |>
-  group_by(game_id,sequence_id) |>
-  arrange(sl_event_id.by_group = TRUE) |>
-  select(-c(player_id,period,
-            has_tracking_data,team_id,
-            opp_team,opp_team_id,
-            flags))
+test2 <- xT_basic_data |>
+  filter(event_type == "pass") |>
+  select(event_type,description,player_name,
+         team,sequence_id,outcome,xT,xT_next,change_xT)
 
-
+test3 <- events |>
+  event_type == "shot"
+         
 
 
 
