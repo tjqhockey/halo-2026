@@ -88,8 +88,17 @@ get_possessions_5v5 <- function(){
                       period_time >= start_time,
                       period_time <= end_time))
   
+  no_empty_nets <- events |>
+    left_join(stints |>
+                distinct(game_id, game_stint, is_home_net_empty, is_away_net_empty),
+              join_by(game_id, game_stint)) |>
+    filter(is_home_net_empty == FALSE, is_away_net_empty == FALSE) |>
+    select(game_id, sl_event_id)
+  
   pos_filtered_n <- possessions |>
     inner_join(no_penalties,
+               join_by(game_id, sl_event_id)) |>
+    inner_join(no_empty_nets,
                join_by(game_id, sl_event_id)) |>
     group_by(game_id, possession_id) |>
     summarize(n = n())
@@ -160,7 +169,8 @@ get_xT_data_basic <- function() {
     filter(event_type %in% c('controlledbreakout', 'pass',
                              'dumpin', 'dumpout',
                              'carry', 'puckprotection', 'reception',
-                             'failedpasslocation', 'shot')) 
+                             'failedpasslocation', 'shot',
+                             'lpr')) 
   return(xT_data_basic)
 }
 

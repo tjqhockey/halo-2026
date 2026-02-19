@@ -9,8 +9,9 @@ source(here('data', 'data-files', 'data_loader.R'))
 source(here('docs', 'xt_basic.R'))
 
 xT_pos_5v5 <- get_xT_data_basic()
+pos_5v5 <- get_possessions_5v5()
 
-xT_basic_data <- xT_pos_5v5  |>
+xT_basic_data <- xT_pos_5v5 |>
   left_join(box_shot_probs |>
               select(box_id, shot_prob),
             join_by(box_id)) |>
@@ -38,13 +39,15 @@ xT_basic_data <- xT_pos_5v5  |>
   group_by(game_id, possession_id) |>
   mutate(xT_next = case_when(!is.na(lead(xT)) ~ lead(xT),
                              is.na(lead(xT)) & event_type == 'shot' ~ goal_prob,
-                             T ~ 0),
+                             T ~ NA),
          change_xT = xT_next - xT)
   
 xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
   group_by(player_id, player_name) |>
-  summarize(total_xT = sum(change_xT, na.rm = T)) |>
+  summarize(total_xT = sum(change_xT, na.rm = T),
+            avg_xT = ,
+            ) |>
   ungroup() |>
   arrange(desc(total_xT)) |>
   mutate(rank = 1:n()) |> 
