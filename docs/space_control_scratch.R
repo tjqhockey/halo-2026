@@ -110,7 +110,7 @@ sc_shoot_data <- sp_tracking_data |>
   # just do one game for now
   group_by(game_id) |>
   group_split() |>
-  furrr::future_map(\(game_df){
+  furrr::future_map(\(game_df, rink_grid){
   
     game_df |>
       group_by(sl_event_id) |>
@@ -233,7 +233,7 @@ sc_shoot_data <- sp_tracking_data |>
       }, rink_grid = rink_grid) |>
       purrr::list_rbind()
     
-  }) |>
+  }, rink_grid = rink_grid) |>
   purrr::list_rbind()
 timer$stop('test')
 
