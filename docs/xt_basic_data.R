@@ -20,7 +20,8 @@ xT_basic_data <- xT_pos_5v5  |>
   mutate(move_prob = 1 - shot_prob) |>
   rowwise() |>
   group_split() |>
-  purrr::map(\(row, trans_mat, xT_tbl){
+  purrr::imap(\(row, idx, trans_mat, xT_tbl){
+    print(idx)
     tp_xT_sum <- trans_mat |>
       filter(from_box == row$box_id) |>
       left_join(xT_tbl, join_by(to_box == box_id)) |>
@@ -35,8 +36,10 @@ xT_basic_data <- xT_pos_5v5  |>
   purrr::list_rbind() |>
   mutate(xT = shot_prob*goal_prob + move_prob*tp_xT_sum) |>
   group_by(game_id, possession_id) |>
-  mutate(xT_prev = lag(xT),
-         change_xT = xT - xT_prev)
+  mutate(xT_next = case_when(!is.na(lead(xT)) ~ lead(xT),
+                             is.na(lead(xT)) & event_type == 'shot' ~ goal_prob,
+                             T ~ 0),
+         change_xT = xT_next - xT)
   
 xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
@@ -45,10 +48,10 @@ xT_basic_data |>
   ungroup() |>
   arrange(desc(total_xT)) |>
   mutate(rank = 1:n()) |> 
-  filter(str_detect(player_name, 'Grimaldi'))
+  # filter(str_detect(player_name, 'Grimaldi'))
   View()
 
-saveRDS(xT_basic_data, here('data', 'datasets', 'xT_basic_data.R'))
+saveRDS(xT_basic_data, here('data', 'datasets', 'xT_basic_data.rds'))
 
 # optimal xT:
 # kind of a failed experiment
