@@ -238,32 +238,95 @@ sc_shoot_data <- sp_tracking_data |>
 timer$stop('test')
 
 saveRDS(sc_shoot_data, here('data', 'datasets', 'sc_shoot_data.rds'))
-  
-# sc_shoot_data <- sc_shoot_data |>
-#   group_by(game_id, sl_event_id) |>
-#   mutate(# rink_control = rje::expit(sum(if_else(tracking_team_id == possession_team_id, I_i, 0)) -
-#     # sum(if_else(tracking_team_id != possession_team_id, I_i, 0)))
-#     pos_tri_control = sum(if_else(tracking_team_id == possession_team_id, boxes_integrated, 0)),
-#     neg_tri_control = sum(if_else(tracking_team_id != possession_team_id, boxes_integrated, 0)),
-#     tot_tri_control = pos_tri_control - neg_tri_control,
-#     tri_control = rje::expit(tot_tri_control)
-#   ) |>
-#   ungroup()
 
-# prob_shoot_model <- gam(data = sc_shoot_data |>
-#                           mutate(is_shot = if_else(event_type == 'shot', 1, 0)) |>
-#                           select(is_shot, x_adj, y_adj, tri_control, cone_people),
-#                         formula = is_shot ~ te(x_adj,y_adj) + s(x_adj) + s() + s(),
-#                         family = "binomial")
-# actual <- sc_shoot_data |>
-#   mutate(is_shot = if_else(event_type == 'shot', 1, 0))
-# 
-# calibration_data <- tibble(pred = predict(prob_shoot_model), actual)
-# 
+sc_shoot_data_raw <- readRDS(here('data', 'datasets', 'sc_shoot_data.rds'))
+  
+sc_shoot_data <- sc_shoot_data_raw |>
+  group_by(game_id, sl_event_id, event_type, flags, x_adj, y_adj) |>
+  summarize(# rink_control = rje::expit(sum(if_else(tracking_team_id == possession_team_id, I_i, 0)) -
+    # sum(if_else(tracking_team_id != possession_team_id, I_i, 0)))
+    pos_tri_control = sum(if_else(tracking_team_id == possession_team_id, boxes_integrated, 0)),
+    neg_tri_control = sum(if_else(tracking_team_id != possession_team_id, boxes_integrated, 0)),
+    tot_tri_control = pos_tri_control - neg_tri_control,
+    tri_control = rje::expit(tot_tri_control),
+    n_players_tri = sum(in_triangle)
+  ) |>
+  ungroup()
+
+sc_gp_data <- sc_shoot_data |>
+  filter(event_type == 'shot') |>
+  mutate(is_goal = if_else(str_detect(flags, 'withgoal'), 1, 0))
+
+library(mgcv)
+xG_model <- gam(data = sc_gp_data,
+                        formula = is_goal ~ te(x_adj,y_adj, tri_control) + s(n_players_tri, k = 5),
+                        family = "binomial")
+
+actual <- sc_gp_data |>
+  filter(event_type == 'shot') |>
+  mutate(is_goal = if_else(str_detect(flags, 'withgoal'), 1, 0)) |>
+  pull(is_goal)
+
+calibration_data <- tibble(pred = predict(xG_model, type = 'response'), actual)
+
+library(ggplot2)
+calibration_data  |>
+  mutate(interval = cut_number(pred, n =10),
+                        include.lowest = T) |>
+  group_by(interval) |>
+  summarize(int_pred = mean(pred),
+            int_actual = mean(actual),
+            se = sqrt((int_actual*(1-int_actual))/n()),
+            n = n(),
+            ci_lower = pmax(int_actual - 2*se, 0),
+            ci_upper = pmin(int_actual + 2*se, 1)) |>
+  ggplot(aes(x = int_pred, y = int_actual)) + 
+  geom_point(alpha = 0.5, aes(size = n)) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper)) +
+  geom_smooth(se = FALSE, method = 'loess') +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(x = "Predicted probability", y = "Observed fraction",
+       size = 'Count',title = "Probability to Shoot Calibration") +
+  ylim(0, 1) +
+  theme(text=element_text(size=15))
+
+ps_model <- gam(data = sc_shoot_data |>
+                          mutate(is_shot = if_else(event_type == 'shot', 1, 0),
+                                 xG_sc = predict(xG_model, newdata = sc_shoot_data, type = 'response')),
+                        formula = is_shot ~ te(x_adj,y_adj, tri_control) + s(n_players_tri, k = 5) + s(xG_sc),
+                        family = "binomial")
+
+actual <- sc_shoot_data |>
+  mutate(is_shot = if_else(event_type == 'shot', 1, 0)) |>
+  pull(is_shot)
+
+calibration_data <- tibble(pred = predict(ps_model, type = 'response'), actual)
+
+calibration_data |>
+  mutate(interval = cut_number(pred, n = 10),
+         include.lowest = T) |>
+  group_by(interval) |>
+  summarize(int_pred = mean(pred),
+            int_actual = mean(actual),
+            se = sqrt((int_actual*(1-int_actual))/n()),
+            n = n(),
+            ci_lower = pmax(int_actual - 2*se, 0),
+            ci_upper = pmin(int_actual + 2*se, 1)) |>
+  ggplot(aes(x = int_pred, y = int_actual)) + 
+  geom_point(alpha = 0.5, aes(size = n)) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper)) +
+  geom_smooth(se = FALSE, method = 'loess') +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(x = "Predicted probability", y = "Observed fraction",
+       size = 'Count',title = "Probability to Shoot Calibration") +
+  ylim(0, 1) +
+  theme(text=element_text(size=15))
+
+#
 # boxes <- tibble(box_id = (sc_shoot_data$boxes[1] |> stringr::str_split(pattern = '_'))[[1]],
 #                 present = 1)
-# 
-# grid_data <- rink_grid |> 
+#
+# grid_data <- rink_grid |>
 #   left_join(boxes, by = 'box_id') |>
 #   mutate(present = if_else(is.na(present), 0, present),
 #          x_center = (x_min + x_max)/2,
@@ -284,6 +347,6 @@ saveRDS(sc_shoot_data, here('data', 'datasets', 'sc_shoot_data.rds'))
 #   # lower
 #   geom_abline(intercept = 53.52542, slope = -0.5677014) +
 #   geom_point(data = tibble(x = 38.0256, y = 31.93824), aes(x = x, y = y)) +
-#   geom_text(data = grid_data, aes(x = x_center, y = y_center, label = box_id), 
+#   geom_text(data = grid_data, aes(x = x_center, y = y_center, label = box_id),
 #             color = "black", size = 3) +
 #   geom_point(data = sc_shoot_data, aes(x = tracking_x_adj, y = tracking_y_adj, color = tracking_team_id))
