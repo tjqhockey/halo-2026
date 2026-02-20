@@ -3,6 +3,7 @@
 library(here)
 library(dplyr)
 library(tidyr)
+library(mgcv)
 
 source(here('docs', 'misc_helper_fns.R'))
 source(here('data', 'data-files', 'data_loader.R'))
@@ -64,8 +65,8 @@ sc_shoot_data <- sc_shoot_data |>
 
 # Make dataset ------------------------------------------------------------
 
-xT_pos_5v5 <- get_xT_data_basic()
-pos_5v5 <- get_possessions_5v5()
+# xT_pos_5v5 <- get_xT_data_basic()
+# pos_5v5 <- get_possessions_5v5()
 
 # xT_basic_data <- xT_pos_5v5 |>
 #   left_join(box_shot_probs |>
@@ -165,7 +166,7 @@ xT_basic_data |>
   arrange(desc(abs(change_sc))) |>
   View()
   
-saveRDS(xT_basic_data, here('data', 'datasets', 'xT_basic_data.rds'))
+saveRDS(xT_basic_data, here('data', 'datasets', 'xT_sc_data.rds'))
 
 # optimal xT:
 # kind of a failed experiment
