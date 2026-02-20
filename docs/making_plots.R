@@ -8,11 +8,11 @@ library(grid)
 #source(here('docs', 'xt_basic.R'))
 
 
-## Right from xT_basic_data.R
+## Updated to sum xT_sc
 top_10 <- xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
   group_by(player_id, player_name, team) |>
-  summarize(total_xT = sum(change_xT, na.rm = T),
+  summarize(total_xT = sum(change_xT_sc, na.rm = T),
             num_relevant_events = n()) |> 
   ungroup() |>
   arrange(desc(total_xT)) |>
@@ -23,7 +23,7 @@ top_10 <- xT_basic_data |>
 bot_10 <- xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
   group_by(player_id, player_name, team) |>
-  summarize(total_xT = sum(change_xT, na.rm = T),
+  summarize(total_xT = sum(change_xT_sc, na.rm = T),
             num_relevant_events = n()) |> 
   ungroup() |>
   arrange(desc(total_xT)) |>
@@ -38,10 +38,10 @@ top_10 |>
   unite("player_name", First, Last, sep = " ") |>
   select(rank,player_name,team,num_relevant_events,total_xT) |>
   mutate(total_xT = round(total_xT,2)) |>
-  rename(Rank = rank,
-         "Player Name" = player_name,
-         "Total xTA" = total_xT,
-         "# Relevant Events" = num_relevant_events,
+  rename(`Rank` = rank,
+         `"Player Name"` = player_name,
+         `xTA[sc]` = total_xT,
+         `"# Relevant Events"` = num_relevant_events,
          Team = team) |>
   ggtexttable(rows = NULL,
               theme = ttheme(
@@ -49,7 +49,8 @@ top_10 |>
                 colnames.style = colnames_style(col = "white",
                                                 fontface = "bold",
                                                 cex = 1.2,
-                                                fill = "steelblue"),
+                                                fill = "steelblue",
+                                                parse = TRUE),
                 tbody.style = tbody_style(fill = rep(c("lightgray", "lightblue"),
                                                      length.out = nrow(top_10)),
                                           cex = 1.2)
@@ -105,7 +106,7 @@ geom_hockey(league = "AHL",
 top_5 <- xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
   group_by(player_id, player_name, team) |>
-  summarize(total_xT = sum(change_xT, na.rm = T),
+  summarize(total_xT = sum(change_xT_sc, na.rm = T),
             num_relevant_events = n()) |> 
   ungroup() |>
   arrange(desc(total_xT)) |>
@@ -116,7 +117,7 @@ top_5 <- xT_basic_data |>
 top_5_with_types <- xT_basic_data |>
   filter(player_id %in% top_5$player_id) |>
   group_by(player_id,player_name,team,event_type) |>
-  summarize(total_xT = sum(change_xT, na.rm = T),
+  summarize(total_xT = sum(change_xT_sc, na.rm = T),
             num_relevant_events = n()) |>
   ungroup() |>
   arrange(desc(total_xT)) |>
@@ -128,6 +129,18 @@ top_5_with_types <- xT_basic_data |>
 top_5_with_types |>
   separate(player_name, into = c("Last", "First"), sep = ",\\s*") |>
   unite("player_name", First, Last, sep = " ") |>
+  mutate(event_type = recode(event_type,
+                             carry = "Carry",
+                             controlledbreakout = "Controlled Breakout",
+                             dumpin = "Dump-In",
+                             dumpout = "Dump-Out",
+                             failedpasslocation = "Failed Pass",
+                             lpr = "Loose Puck Recovery",
+                             pass = "Pass",
+                             puckprotection = "Puck Protection",
+                             reception = "Reception",
+                             shot = "Shot"
+  )) |>
   ggplot(aes(x = reorder(player_name, full_sum_xT),
              y = total_xT,
              fill = event_type)) +
@@ -146,7 +159,7 @@ top_5_with_types |>
     size = 4
   ) +
   labs(x = "Player Name",
-       y = "Total xTA",
+       y = expression("Total " ~ xTA[sc]),
        fill = "Event Type") +
   theme_bw()
 
@@ -185,9 +198,10 @@ geom_hockey(league = "AHL",
   geom_text(
     data = tibble(),
     aes(x = 71, y = 30),
-    label = "+9.3% Predicted \n Probability to Score",
+    label = '"+" * .096 ~ xTA[sc]',
+    parse = TRUE,
     color = "black",
-    size = 3,
+    size = 4,
     hjust = 0,
     vjust = 1
   ) +
@@ -218,9 +232,40 @@ test3 <- xT_basic_data |>
   filter(possession_id == 
   "df609ab7-6328-37cf-a71a-fb6672cedaf4_6_27")
          
-
-
-
+## Just fooling around
+test4 <- xT_basic_data |>
+  # filter(str_detect(player_name, 'Griffith')) |> View()
+  group_by(player_id, player_name, team) |>
+  summarize(total_xT = mean(change_xT_sc, na.rm = T),
+            num_relevant_events = n()) |> 
+  ungroup() |>
+  arrange(desc(total_xT)) |>
+  # filter(str_detect(player_name, 'Griffith'))
+  filter(num_relevant_events > 500) |>
+  mutate(rank = 1:n()) |>
+  slice_head(n = 25)
+test4 |>
+  separate(player_name, into = c("Last", "First"), sep = ",\\s*") |>
+  unite("player_name", First, Last, sep = " ") |>
+  select(rank,player_name,team,num_relevant_events,total_xT) |>
+  mutate(total_xT = round(total_xT,4)) |>
+  rename(Rank = rank,
+         "Player Name" = player_name,
+         "Total xTA" = total_xT,
+         "# Relevant Events" = num_relevant_events,
+         Team = team) |>
+  ggtexttable(rows = NULL,
+              theme = ttheme(
+                "light",
+                colnames.style = colnames_style(col = "white",
+                                                fontface = "bold",
+                                                cex = 1.2,
+                                                fill = "steelblue"),
+                tbody.style = tbody_style(fill = rep(c("lightgray", "lightblue"),
+                                                     length.out = nrow(top_10)),
+                                          cex = 1.2)
+              )
+  )
 
 
 
