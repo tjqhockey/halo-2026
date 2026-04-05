@@ -26,7 +26,6 @@ sp_model <- gam(data = sp_data_basic |>
                 formula = is_shot ~ te(x_adj,y_adj) + s(xG_plus),
                 family = "binomial")
 
-
 # Fit space control models ------------------------------------------------
 
 sc_shoot_data_raw <- readRDS(here('data', 'datasets', 'sc_shoot_data.rds'))
@@ -145,6 +144,155 @@ xT_basic_data <- xT_basic_data |>
       is.na(lead(xT)) ~ 0,
       TRUE ~ 0),
     change_xT = xT_next - xT)
+
+# illustrative sc play
+
+change_event_id <- sc_shoot_data |>
+  filter(game_id == '18a44513-6719-9df6-3941-b5492e67ff48',
+         sl_event_id == 3083) |>
+  select(game_id, sl_event_id)
+
+tracking_change_event <- sc_shoot_data_raw |>
+  ungroup() |>
+  inner_join(change_event_id, join_by(game_id, sl_event_id)) |>
+  rowwise() |>
+  group_split() |>
+  purrr::map(\(df, rink_grid){
+    
+    mu <- get_player_influence_mu(player_x = df$tracking_x_adj,
+                                  player_y = df$tracking_y_adj,
+                                  player_v_x = df$tracking_vel_x_adj,
+                                  player_v_y = df$tracking_vel_y_adj)
+    cov <- get_player_influence_cov(player_v_x = df$tracking_vel_x_adj, 
+                                    player_v_y = df$tracking_vel_y_adj,
+                                    player_x = df$tracking_x_adj,
+                                    player_y = df$tracking_y_adj,
+                                    puck_x = df$puck_x_adj,
+                                    puck_y = df$puck_y_adj)
+    
+    
+    df |>
+      mutate(mu = list(mu), cov = list(cov))
+  }, rink_grid = rink_grid) |>
+  purrr::list_rbind() |>
+  left_join(events |> select(team_id, tracking_team = team) |>
+              distinct(), 
+            join_by(tracking_team_id == team_id))
+
+puck_x <- tracking_change_event$x_adj[1]
+puck_y <- tracking_change_event$y_adj[1]
+
+shooter_x <- tracking_change_event |>
+  filter(tracking_player_id == '7779d05b-bf33-9acd-a1a5-bb2e852f4a3f') |>
+  pull(tracking_x_adj)
+shooter_y <- tracking_change_event |>
+  filter(tracking_player_id == '7779d05b-bf33-9acd-a1a5-bb2e852f4a3f') |>
+  pull(tracking_y_adj)
+
+boxes <- tibble(box_id = (tracking_change_event$boxes[1] |> stringr::str_split(pattern = '_'))[[1]],
+                present = 1)
+
+box_sc <- rink_grid |>
+  filter(box_id %in% boxes$box_id) |>
+  rowwise() |>
+  group_split() |>
+  purrr::map(\(box_df, tracking_change_event){
+    
+    box <- box_df$box_id
+    
+    pos_team_ids <- c()
+    team_ids <- c()
+    box_player_integrated <- c()
+    player_ids <- c()
+    
+    for (i in 1:nrow(tracking_change_event)) {
+      
+      row <- tracking_change_event[i,]
+      
+      pos_team_ids <- append(pos_team_ids, row$possession_team_id)
+      
+      team_ids <- append(team_ids, row$tracking_team_id)
+      
+      player_ids <- append(player_ids, row$tracking_player_id)
+      
+      mu <- row$mu[[1]]
+      cov <- row$cov[[1]]
+      
+      integ_box <- mvtnorm::pmvnorm(upper = c(box_df[box_df$box_id == box,]$x_max,
+                                              box_df[box_df$box_id == box,]$y_max),
+                                    lower = c(rink_grid[rink_grid$box_id == box,]$x_min,
+                                              rink_grid[rink_grid$box_id == box,]$y_min),
+                                    mean = mu,
+                                    sigma = cov)
+      box_player_integrated <- append(box_player_integrated, integ_box)
+    }
+    
+    tibble(box_id = box,
+           possession_team_id = pos_team_ids,
+           tracking_team_id = team_ids,
+           integ_box = box_player_integrated)
+    
+  }, tracking_change_event = tracking_change_event) |>
+  purrr::list_rbind() |>
+  group_by(box_id) |>
+  summarize(pos_box_control = sum(if_else(tracking_team_id == possession_team_id, integ_box, 0)),
+         neg_box_control = sum(if_else(tracking_team_id != possession_team_id, integ_box, 0)),
+         tot_box_control = pos_box_control - neg_box_control,
+         box_control = rje::expit(tot_box_control))
+
+library(sportyR)
+
+rink_grid <- grid_the_rink() |>
+  mutate(box_id = str_c(x_box_id, y_box_id, sep = '-')) |>
+  select(-x_box_id, -y_box_id)
+
+grid_data <- rink_grid |>
+  left_join(boxes, by = 'box_id') |>
+  left_join(box_sc, by = 'box_id') |>
+  mutate(present = if_else(is.na(present), 0, present),
+         # alpha_val = if_else(present == 1, .5, .5),
+         x_center = (x_min + x_max)/2,
+         y_center = (y_min + y_max)/2)
+
+geom_hockey(league = "AHL",
+            display_range = "offense") +
+  geom_rect(
+    data = grid_data,
+    aes(xmin = x_min, xmax = x_max,
+        ymin = y_min, ymax = y_max,
+        fill = box_control),
+    alpha = .5,
+    color = "black",
+    linewidth = 0.3
+  ) +
+  scale_fill_gradient2(
+    low = "blue",      
+    mid = "white",   
+    high = "red", 
+    midpoint = .5,
+    limits = c(.3, .7)
+  ) +
+  geom_point(data = tracking_change_event |> 
+               distinct(x_adj, y_adj), aes(x = x_adj, y = y_adj), size = 3) +
+  geom_point(data = tracking_change_event, aes(x = tracking_x_adj,
+                                               y = tracking_y_adj,
+                                               color = tracking_team),
+             size = 8,
+             alpha = 0.9) +
+  # theme(legend.position = "none") +
+  # upper triangle bound
+  geom_segment(aes(x = puck_x, y = puck_y, xend = 89, yend = 3),
+               linewidth = 1, linetype = 'dashed') +
+  # lower triangle bound
+  geom_segment(aes(x = puck_x, y = puck_y, xend = 89, yend = -3),
+               linewidth = 1, linetype = 'dashed') +
+  # stick
+  geom_segment(aes(x = puck_x, y = puck_y, xend = shooter_x, yend = shooter_y),
+               linewidth = 1) +
+  labs(fill = 'Offensive Box Control',
+       color = 'Team')
+
+# leaderboard
   
 xT_basic_data |>
   # filter(str_detect(player_name, 'Griffith')) |> View()
@@ -166,7 +314,11 @@ xT_basic_data |>
   arrange(desc(abs(change_sc))) |>
   View()
   
+<<<<<<< HEAD
 saveRDS(xT_basic_data, here('data', 'datasets', 'xT_sc_data.rds'))
+=======
+# saveRDS(xT_basic_data, here('data', 'datasets', 'xT_basic_data.rds'))
+>>>>>>> 28ebe9b0d66b29c6df254f47e0dd642e01ff494b
 
 # optimal xT:
 # kind of a failed experiment
