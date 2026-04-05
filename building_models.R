@@ -2,6 +2,7 @@ library(here)
 library(tidyverse)
 library(mgcv)
 
+
 # Loading Data
 events <- file.path(here(), 'data', 'events.parquet') |>
   arrow::read_parquet()

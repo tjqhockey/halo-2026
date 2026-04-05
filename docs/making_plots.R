@@ -40,7 +40,7 @@ top_10 |>
   mutate(total_xT = round(total_xT,2)) |>
   rename(`Rank` = rank,
          `"Player Name"` = player_name,
-         `xTA[sc]` = total_xT,
+         `xTA[rc]` = total_xT,
          `"# Relevant Events"` = num_relevant_events,
          Team = team) |>
   ggtexttable(rows = NULL,
@@ -159,7 +159,7 @@ top_5_with_types |>
     size = 4
   ) +
   labs(x = "Player Name",
-       y = expression("Total " ~ xTA[sc]),
+       y = expression("Total " ~ xTA[rc]),
        fill = "Event Type") +
   theme_bw()
 
@@ -198,7 +198,7 @@ geom_hockey(league = "AHL",
   geom_text(
     data = tibble(),
     aes(x = 71, y = 30),
-    label = '"+" * .096 ~ xTA[sc]',
+    label = '"+" * .096 ~ xTA[rc]',
     parse = TRUE,
     color = "black",
     size = 4,
