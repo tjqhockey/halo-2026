@@ -54,6 +54,7 @@ coefs <- inner_join(xt_coef, xg_coef, by = c("player_id", "player_name")) |>
 plot <- coefs |>
   ggplot(aes(x = xt_estimate, y = xg_estimate)) +
   geom_point() +
+  geom_abline(slope = 0.3695, color = "blue") +
   labs(
     x = "RAPM Coefficients with y = xT",
     y = "RAPM Coefficients with y = xG",
@@ -64,3 +65,7 @@ plot <- coefs |>
 plot
 
 saveRDS(plot, here('data', 'datasets', 'avery_hw5.rds'))
+
+# Linear relationship between xT and xG coefficients, no intercept
+linear_model <- lm(xg_estimate ~ 0 + xt_estimate, data = coefs)
+summary(linear_model)
