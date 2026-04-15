@@ -28,6 +28,10 @@ xg_ridge <- cv.glmnet(X_xg, y_xg, alpha = 0, intercept = TRUE, standardize = FAL
 saveRDS(xt_ridge, here('data', 'datasets', 'xt_ridge.rds'))
 saveRDS(xg_ridge, here('data', 'datasets', 'xg_ridge.rds'))
 
+# Load models
+xt_ridge <- readRDS(here('data', 'datasets', 'xt_ridge.rds'))
+xg_ridge <- readRDS(here('data', 'datasets', 'xg_ridge.rds'))
+
 # Get player coefficients
 library(broom)
 xt_coef <- tidy(xt_ridge$glmnet.fit) |>
@@ -53,7 +57,7 @@ plot <- coefs |>
   labs(
     x = "RAPM Coefficients with y = xT",
     y = "RAPM Coefficients with y = xG",
-    title = "Using xT and xG as the response variable to build RAPM leads to similar results."
+    title = "Comparison Between xT and xG RAPM Coefficients"
   ) +
   theme_bw()
   
