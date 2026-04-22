@@ -22,4 +22,13 @@ bayes_ridge_rapm_fit <- stan(file = "BayesianRAPM_xTA.stan",
                              seed = 2024)
 
 # Save the model fit
-write_rds(bayes_ridge_rapm_fit, here("xTA_fit.rds"))
+write_rds(bayes_ridge_rapm_fit, here("data", "datasets", "xTA_fit.rds"),
+          compress = "gz")
+
+# Save the posterior samples
+rapm_posterior_samples <- as.data.frame(bayes_ridge_rapm_fit, 
+                                        pars = "lp__", include = FALSE) |>
+  as_tibble()
+
+# Save this table for use in the homework
+write_csv(rapm_posterior_samples, here("data", "datasets", "xTA_posterior.rds"))
