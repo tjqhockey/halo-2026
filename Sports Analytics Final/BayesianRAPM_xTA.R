@@ -30,5 +30,4 @@ rapm_posterior_samples <- as.data.frame(bayes_ridge_rapm_fit,
                                         pars = "lp__", include = FALSE) |>
   as_tibble()
 
-# Save this table for use in the homework
 write_csv(rapm_posterior_samples, here("data", "datasets", "xTA_posterior.rds"))
