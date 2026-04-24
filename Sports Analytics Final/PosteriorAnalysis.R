@@ -63,3 +63,5 @@ posterior_ratings_xg <- long_posterior_samples_xg |>
             median = median(beta),
             lower_80 = quantile(beta, 0.1),
             upper_80 = quantile(beta, 0.9))
+
+# Export the posterior summaries for Tyler and Alex's models
