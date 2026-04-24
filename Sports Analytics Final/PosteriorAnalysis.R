@@ -65,3 +65,4 @@ posterior_ratings_xg <- long_posterior_samples_xg |>
             upper_80 = quantile(beta, 0.9))
 
 # Export the posterior summaries for Tyler and Alex's models
+write_csv(posterior_ratings_xg, here('data', 'datasets', 'posterior_ratings_xg.csv'))
