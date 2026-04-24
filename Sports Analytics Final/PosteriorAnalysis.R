@@ -3,7 +3,9 @@ library(tidyverse)
 library(bayesplot)
 
 # xTA trace plot
+bayes_ridge_rapm_fit <- read_rds(here("data", "datasets", "xTA_fit.rds"))
 mcmc_trace(bayes_ridge_rapm_fit, pars = c("sigma_shifts", "sigma_players"))
+# sigma_players may not be that well-explored, Rhat is 1.01 and effective sample size is small
 
 # Read xTA posterior samples
 xt_posterior_samples <- read_csv(here("data", "datasets", "xTA_posterior.rds"))

@@ -2,6 +2,7 @@
 # This file does xTA
 library(rstan)
 library(here)
+library(tidyverse)
 
 # Read design matrix and separate into X and y
 xt_matrix <- readRDS(here('data', 'datasets', 'xt_matrix.rds'))
