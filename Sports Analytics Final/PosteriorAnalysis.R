@@ -69,10 +69,46 @@ write_csv(posterior_ratings_xg, here('data', 'datasets', 'posterior_ratings_xg.c
 
 # Top 10 xTA coefficients plot
 library(ggridges)
+top10_xt <- posterior_ratings_xt |>
+  slice_max(mean, n = 10)
 long_posterior_samples_xt |>
-  group_by(player_name) |>
-  mutate(mean = mean(beta)) |>
-  ungroup() |>
-  slice_max(mean, n = 10) |>
-  ggplot(aes(x = beta, y = player_name)) +
-  geom_density_ridges()
+  inner_join(top10_xt, by = "player_name") |>
+  select(-mean) |>
+  ggplot(aes(x = beta, y = reorder(player_name, beta, FUN = mean))) +
+  geom_density_ridges() +
+  labs(
+    x = "XT Added Coefficient",
+    y = "Player Name",
+    title = "Posterior Distributions of Bayesian RAPM xT Added Model",
+    subtitle = "Top 10 Players, Ordered by Posterior Mean"
+  ) +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 20),
+    plot.subtitle = element_text(size = 16)
+  )
+
+# Top 10 xG coefficients plot
+top10_xg <- posterior_ratings_xg |>
+  slice_max(mean, n = 10)
+long_posterior_samples_xg |>
+  inner_join(top10_xg, by = "player_name") |>
+  select(-mean) |>
+  ggplot(aes(x = beta, y = reorder(player_name, beta, FUN = mean))) +
+  geom_density_ridges() +
+  labs(
+    x = "XG Coefficient",
+    y = "Player Name",
+    title = "Posterior Distributions of Bayesian RAPM xG Model",
+    subtitle = "Top 10 Players, Ordered by Posterior Mean"
+  ) +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(size = 20),
+    plot.subtitle = element_text(size = 16)
+  )
+
