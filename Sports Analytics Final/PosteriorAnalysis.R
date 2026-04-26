@@ -66,3 +66,13 @@ posterior_ratings_xg <- long_posterior_samples_xg |>
 
 # Export the posterior summaries for Tyler and Alex's models
 write_csv(posterior_ratings_xg, here('data', 'datasets', 'posterior_ratings_xg.csv'))
+
+# Top 10 xTA coefficients plot
+library(ggridges)
+long_posterior_samples_xt |>
+  group_by(player_name) |>
+  mutate(mean = mean(beta)) |>
+  ungroup() |>
+  slice_max(mean, n = 10) |>
+  ggplot(aes(x = beta, y = player_name)) +
+  geom_density_ridges()
