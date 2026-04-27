@@ -118,6 +118,8 @@ player_ridge_ratings <- ridge_ratings_df %>%
   separate(feature, into = c("player_id", "stint_type"), sep = "_") |>
   left_join(players)
 
+# Saving design matrix for stan part
+saveRDS(design_matrix, here('data', 'datasets', 'special_teams_design.rds'))
 
 
 
