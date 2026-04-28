@@ -67,48 +67,40 @@ posterior_ratings_xg <- long_posterior_samples_xg |>
 # Export the posterior summaries for Tyler and Alex's models
 write_csv(posterior_ratings_xg, here('data', 'datasets', 'posterior_ratings_xg.csv'))
 
-# Top 10 xTA coefficients plot
+# Top and bottom 10 xTA coefficients plot
 library(ggridges)
 top10_xt <- posterior_ratings_xt |>
-  slice_max(mean, n = 10)
-long_posterior_samples_xt |>
+  slice_max(mean, n = 10) |>
+  rbind(posterior_ratings_xt |> slice_min(mean, n = 10))
+p1 <- long_posterior_samples_xt |>
   inner_join(top10_xt, by = "player_name") |>
   select(-mean) |>
   ggplot(aes(x = beta, y = reorder(player_name, beta, FUN = mean))) +
   geom_density_ridges() +
   labs(
-    x = "XT Added Coefficient",
+    x = "xT Added Coefficient",
     y = "Player Name",
-    title = "Posterior Distributions of Bayesian RAPM xT Added Model",
-    subtitle = "Top 10 Players, Ordered by Posterior Mean"
+    title = "Posterior Distributions of xT Added Model",
+    subtitle = "Top and Bottom 10 Players by Posterior Mean"
   ) +
-  theme_bw() +
-  theme(
-    axis.title = element_text(size = 16),
-    axis.text = element_text(size = 12),
-    plot.title = element_text(size = 20),
-    plot.subtitle = element_text(size = 16)
-  )
+  theme_bw()
 
 # Top 10 xG coefficients plot
 top10_xg <- posterior_ratings_xg |>
-  slice_max(mean, n = 10)
-long_posterior_samples_xg |>
+  slice_max(mean, n = 10) |>
+  rbind(posterior_ratings_xg |> slice_min(mean, n = 10))
+p2 <- long_posterior_samples_xg |>
   inner_join(top10_xg, by = "player_name") |>
   select(-mean) |>
   ggplot(aes(x = beta, y = reorder(player_name, beta, FUN = mean))) +
   geom_density_ridges() +
   labs(
-    x = "XG Coefficient",
+    x = "xG Coefficient",
     y = "Player Name",
-    title = "Posterior Distributions of Bayesian RAPM xG Model",
-    subtitle = "Top 10 Players, Ordered by Posterior Mean"
+    title = "Posterior Distributions of xG Model",
+    subtitle = "Top and Bottom 10 Players by Posterior Mean"
   ) +
-  theme_bw() +
-  theme(
-    axis.title = element_text(size = 16),
-    axis.text = element_text(size = 12),
-    plot.title = element_text(size = 20),
-    plot.subtitle = element_text(size = 16)
-  )
+  theme_bw()
 
+library(patchwork)
+p1 + p2
