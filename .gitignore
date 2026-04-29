@@ -3,4 +3,4 @@
 .RData
 .Ruserdata
 *.parquet
-*.rds
+*.rds*.zip
